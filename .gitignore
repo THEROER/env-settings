@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+poetry.lock
+
+# Virtual Environment
+venv/
+ENV/
+.env
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+*.sqlite3
+*.db
+
+# Alembic
+# Keep alembic versions in git
+
+# Miscellaneous
+.DS_Store
+node_modules/
+
+# Secrets and local configs
+.secrets
+*config.local.py
+.env.local
+.ruff_cache
+
+# AI
+.qodo
+.claude
+CLAUDE.local.md

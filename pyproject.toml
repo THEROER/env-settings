@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "env-settings"
+version = "0.1.0"
+description = "msgspec-based settings loader with .env support"
+authors = ["THEROER <theroer09@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "env_settings", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+msgspec = "^0.19.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+pytest-cov = "^7.0.0"
+ruff = "^0.13.1"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
