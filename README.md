@@ -31,7 +31,7 @@ print(settings.database_url)
 ## Installation
 
 ```bash
-poetry add git+https://github.com/LeavePulse/env-settings
+poetry add git+https://github.com/THEROER/env-settings
 ```
 
 ## Development
