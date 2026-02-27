@@ -156,6 +156,19 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
         return msgspec.convert(raw, cls)
 
 
+class ServiceDefaultsBase(BaseSettings):
+    """Common top-level service defaults used across microservices."""
+
+    debug: bool = False
+    sqlalchemy_echo: bool = False
+    service_name: str = "service"
+    public_base_url: str = "https://leavelocal.com"
+    cors_allow_origins: list[str] = msgspec.field(default_factory=list)
+    cors_allow_origins_debug: list[str] = msgspec.field(default_factory=list)
+    snowflake_worker_id: int = 0
+    snowflake_datacenter_id: int = 0
+
+
 def load_settings(
     cls: type[_T],
     *,
