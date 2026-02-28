@@ -147,12 +147,10 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
         )
         if raw:
             type_hints = get_type_hints(cls, include_extras=True)
-            info = msgspec.inspect.type_info(cls)
-            for field in info.fields:
-                name = field.name
+            for name, hinted_type in type_hints.items():
                 if name not in raw:
                     continue
-                raw[name] = _coerce_value(type_hints[name], raw[name])
+                raw[name] = _coerce_value(hinted_type, raw[name])
         return msgspec.convert(raw, cls)
 
 

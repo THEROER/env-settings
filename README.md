@@ -31,12 +31,12 @@ print(settings.database_url)
 ## Installation
 
 ```bash
-poetry add git+https://github.com/THEROER/env-settings
+uv add git+https://github.com/THEROER/env-settings
 ```
 
 ## Development
 
 ```bash
-poetry install
-poetry run pytest
+uv sync --dev
+uv run pytest
 ```
