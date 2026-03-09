@@ -70,4 +70,4 @@ def test_invalid_cls_raises() -> None:
         pass
 
     with pytest.raises(TypeError):
-        load_settings(Other)  # type: ignore[arg-type]
+        load_settings(Other)  # type: ignore[type-var]
