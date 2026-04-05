@@ -1,0 +1,16 @@
+name: discord-commit-notify
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    uses: LeavePulse/service-toolkit/.github/workflows/reusable-discord-commit-notify.yml@main
+    secrets:
+      discord_commit_webhook_url: ${{ secrets.DISCORD_COMMIT_WEBHOOK_URL }}
