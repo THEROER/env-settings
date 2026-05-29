@@ -1,0 +1,23 @@
+# Shared LeavePulse pre-commit gate. Logic lives in service-toolkit's `lp-ci`
+# (service_toolkit.dev.ci_runner); this config is intentionally thin and
+# identical across services so it cannot drift. Update behaviour in lp-ci.
+#
+# Install once per clone:  uv run pre-commit install --install-hooks -t pre-commit -t pre-push
+default_install_hook_types: [pre-commit, pre-push]
+repos:
+  - repo: local
+    hooks:
+      - id: lp-ci-static
+        name: lp-ci (ruff/arch/mypy/bandit/secrets)
+        entry: uv run lp-ci --no-sync --no-tests
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: lp-ci-tests
+        name: lp-ci tests (pytest)
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
