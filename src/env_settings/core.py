@@ -11,6 +11,7 @@ from typing import Any, Mapping, TypeVar, cast
 from typing import get_args, get_origin, get_type_hints
 
 import msgspec
+import msgspec.yaml
 
 _T = TypeVar("_T", bound="BaseSettings")
 _S = TypeVar("_S")
@@ -284,6 +285,33 @@ def _coerce_value(expected_type: Any, raw: Any) -> Any:  # noqa: ANN401
     return raw
 
 
+def _is_yaml_path(path: str | os.PathLike[str]) -> bool:
+    return Path(path).suffix.lower() in {".yaml", ".yml"}
+
+
+def _parse_config_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    decoded = msgspec.yaml.decode(path.read_bytes())
+    if decoded is None:
+        return {}
+    if not isinstance(decoded, Mapping):
+        msg = f"config file {path} must contain a mapping at the top level"
+        raise msgspec.ValidationError(msg)
+    return dict(decoded)
+
+
+def _resolve_config_field(
+    key: str,
+    *,
+    fields: Mapping[str, str],
+    case_sensitive: bool,
+) -> str | None:
+    if case_sensitive:
+        return fields.get(key)
+    return fields.get(key.upper()) or fields.get(key)
+
+
 def _parse_env_file(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
     if not path.exists():
@@ -443,6 +471,7 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
         prefix: str | None,
         case_sensitive: bool,
         defaults: Mapping[str, Any] | None,
+        config: Mapping[str, Any] | None,
     ) -> dict[str, Any]:
         result: dict[str, Any] = {}
         file_refs: dict[str, Any] = {}
@@ -457,6 +486,16 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
                     prefix=prefix,
                     case_sensitive=case_sensitive,
                     allow_prefix=False,
+                )
+                if field:
+                    result[field] = value
+
+        if config:
+            for key, value in config.items():
+                field = _resolve_config_field(
+                    key,
+                    fields=fields,
+                    case_sensitive=case_sensitive,
                 )
                 if field:
                     result[field] = value
@@ -515,11 +554,24 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
         *,
         env: Mapping[str, str] | None = None,
         env_file: str | os.PathLike[str] | None = None,
+        config_file: str | os.PathLike[str] | None = None,
         prefix: str | None = None,
         case_sensitive: bool = False,
         defaults: Mapping[str, Any] | None = None,
+        config: Mapping[str, Any] | None = None,
     ) -> _T:
-        """Create settings instance from environment data."""
+        """Create settings instance from environment data.
+
+        Values are resolved with the precedence
+        ``env`` > ``env_file`` (.env) > ``config_file`` (YAML) > ``defaults``.
+        ``config`` accepts an already-parsed mapping (e.g. a section of a
+        larger YAML document) and is merged at the same level as
+        ``config_file``.
+        """
+
+        if config_file is not None:
+            file_config = _parse_config_file(Path(config_file))
+            config = {**file_config, **config} if config else file_config
 
         raw = cls._collect_env(
             env=env,
@@ -527,6 +579,7 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
             prefix=prefix,
             case_sensitive=case_sensitive,
             defaults=defaults,
+            config=config,
         )
         raw = _coerce_collected(
             cls,
@@ -559,6 +612,7 @@ def load_settings(
     *,
     env: Mapping[str, str] | None = None,
     env_file: str | os.PathLike[str] | None = None,
+    config_file: str | os.PathLike[str] | None = None,
     prefix: str | None = None,
     case_sensitive: bool = False,
     defaults: Mapping[str, Any] | None = None,
@@ -571,6 +625,7 @@ def load_settings(
     return cls.load(
         env=env,
         env_file=env_file,
+        config_file=config_file,
         prefix=prefix,
         case_sensitive=case_sensitive,
         defaults=defaults,
@@ -582,12 +637,22 @@ def load_composed_settings(
     *,
     env: Mapping[str, str] | None = None,
     env_file: str | os.PathLike[str] | None = None,
+    config_file: str | os.PathLike[str] | None = None,
     prefixes: Mapping[str, str] | None = None,
     defaults_cls: type[BaseSettings] | None = None,
     case_sensitive: bool = False,
     post_load: Callable[[_S], _S] | None = None,
 ) -> _S:
-    """Load a top-level ``msgspec.Struct`` composed from settings blocks."""
+    """Load a top-level ``msgspec.Struct`` composed from settings blocks.
+
+    When ``config_file`` is given, top-level keys map to shared fields while
+    each nested mapping (keyed by block field name) configures the matching
+    settings block.
+    """
+
+    config: dict[str, Any] = {}
+    if config_file is not None:
+        config = _parse_config_file(Path(config_file))
 
     values: dict[str, Any] = {}
     base_values: dict[str, Any] = {}
@@ -601,6 +666,7 @@ def load_composed_settings(
             env=env,
             env_file=env_file,
             case_sensitive=case_sensitive,
+            config=config or None,
         )
         for field in defaults_cls.__struct_fields__:
             if field in struct_fields:
@@ -622,12 +688,15 @@ def load_composed_settings(
             raise TypeError(msg)
         settings_cls = cast(type[BaseSettings], settings_type)
         default_values = _struct_defaults(base_values.get(field))
+        section = config.get(field)
+        block_config = section if isinstance(section, Mapping) else None
         values[field] = settings_cls.load(
             env=env,
             env_file=env_file,
             prefix=prefix,
             case_sensitive=case_sensitive,
             defaults=default_values,
+            config=block_config,
         )
 
     try:

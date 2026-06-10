@@ -139,10 +139,11 @@ wheels = [
 
 [[package]]
 name = "env-settings"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "msgspec" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -155,7 +156,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "msgspec", specifier = ">=0.21.0,<0.22" }]
+requires-dist = [
+    { name = "msgspec", specifier = ">=0.21.0,<0.22" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
+]
 
 [package.metadata.requires-dev]
 dev = [

@@ -5,7 +5,7 @@ A tiny settings loader inspired by `pydantic_settings`, but implemented with [`m
 ## Features
 
 - Define settings as `msgspec.Struct` classes
-- Load values from the current environment, optional `.env` files, and defaults
+- Load values from the current environment, optional `.env` files, YAML config files, and defaults
 - Automatic type coercion for scalar values and common collection formats
 - Optional prefixes and case-insensitive matching
 - File-backed secret fallback via `*_FILE` variables
@@ -29,6 +29,44 @@ print(settings.database_url)
 ```
 
 `.env` values override defaults, while real environment variables take precedence over the file.
+
+## YAML config files
+
+A YAML (`.yaml`/`.yml`) file can supply structured, non-secret configuration —
+the kind you commit to git — while `.env` keeps private values out of the
+repository. The two sources are independent: each has its own path and either
+can be used alone or together.
+
+```python
+settings = AppSettings.load(config_file="config.yaml", env_file=".env")
+```
+
+```yaml
+# config.yaml — safe to commit
+debug: false
+host: api.example.com
+tags:
+  - landing
+  - monitoring
+```
+
+Values resolve with the precedence **real env vars > `.env` file > YAML config >
+defaults**. So if `HOST` appears both in `config.yaml` and the environment, the
+environment wins; fields only present in YAML are still applied.
+
+Because YAML is already structured, native types are used directly — no string
+parsing is needed for lists, mappings, or nested records:
+
+```yaml
+limits:
+  checkout: 20
+  login: 60
+rules:
+  - { id: 1, score: 95 }
+  - { id: 2, score: 90 }
+```
+
+Top-level YAML keys are matched against field names case-insensitively.
 
 List values can be written as CSV, semicolon/newline-delimited text, or JSON:
 
@@ -109,6 +147,30 @@ settings = load_composed_settings(
 
 Default factories on nested fields are preserved and then overridden by matching
 environment values.
+
+A YAML config file works here too. Top-level keys map to shared fields, while
+each nested mapping (keyed by the block's field name) configures that block:
+
+```python
+settings = load_composed_settings(
+    Settings,
+    config_file="config.yaml",
+    env_file=".env",
+    defaults_cls=ServiceDefaults,
+    prefixes={"database": "POSTGRES_"},
+)
+```
+
+```yaml
+debug: false
+service_name: example-service
+database:
+  host: db.internal
+  port: 5432
+```
+
+Environment variables (e.g. `POSTGRES_HOST`) still override the matching YAML
+values.
 
 ## Installation
 

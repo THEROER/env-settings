@@ -1,12 +1,13 @@
 [project]
 name = "env-settings"
-version = "1.1.0"
-description = "msgspec-based settings loader with .env support"
+version = "1.2.0"
+description = "msgspec-based settings loader with .env and YAML support"
 authors = [{ name = "THEROER", email = "theroer09@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.11,<4"
 dependencies = [
     "msgspec>=0.21.0,<0.22",
+    "pyyaml>=6.0,<7",
 ]
 
 [dependency-groups]
