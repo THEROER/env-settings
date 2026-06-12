@@ -1,4 +1,4 @@
-"""msgspec-based settings loader with .env support."""
+"""msgspec-based settings loader with .env, YAML and TOML support."""
 
 from .core import (
     BaseSettings,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import os
 from pathlib import Path
+import tomllib
 import types
 import typing
 from typing import Any, Mapping, TypeVar, cast
@@ -289,15 +290,44 @@ def _is_yaml_path(path: str | os.PathLike[str]) -> bool:
     return Path(path).suffix.lower() in {".yaml", ".yml"}
 
 
-def _parse_config_file(path: Path) -> dict[str, Any]:
+def _is_toml_path(path: str | os.PathLike[str]) -> bool:
+    return Path(path).suffix.lower() == ".toml"
+
+
+def _decode_config_file(path: Path) -> Any:  # noqa: ANN401
+    if _is_toml_path(path):
+        return tomllib.loads(path.read_text())
+    return msgspec.yaml.decode(path.read_bytes())
+
+
+def _select_config_table(
+    decoded: Mapping[str, Any],
+    table: str,
+    *,
+    path: Path,
+) -> dict[str, Any]:
+    node: Any = decoded
+    for part in table.split("."):
+        if not isinstance(node, Mapping) or part not in node:
+            return {}
+        node = node[part]
+    if not isinstance(node, Mapping):
+        msg = f"config table {table!r} in {path} must be a mapping"
+        raise msgspec.ValidationError(msg)
+    return dict(node)
+
+
+def _parse_config_file(path: Path, *, table: str | None = None) -> dict[str, Any]:
     if not path.exists():
         return {}
-    decoded = msgspec.yaml.decode(path.read_bytes())
+    decoded = _decode_config_file(path)
     if decoded is None:
         return {}
     if not isinstance(decoded, Mapping):
         msg = f"config file {path} must contain a mapping at the top level"
         raise msgspec.ValidationError(msg)
+    if table:
+        return _select_config_table(decoded, table, path=path)
     return dict(decoded)
 
 
@@ -555,6 +585,7 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
         env: Mapping[str, str] | None = None,
         env_file: str | os.PathLike[str] | None = None,
         config_file: str | os.PathLike[str] | None = None,
+        config_table: str | None = None,
         prefix: str | None = None,
         case_sensitive: bool = False,
         defaults: Mapping[str, Any] | None = None,
@@ -562,15 +593,17 @@ class BaseSettings(msgspec.Struct, kw_only=True, omit_defaults=True):
     ) -> _T:
         """Create settings instance from environment data.
 
-        Values are resolved with the precedence
-        ``env`` > ``env_file`` (.env) > ``config_file`` (YAML) > ``defaults``.
+        Values are resolved with the precedence ``env`` > ``env_file`` (.env)
+        > ``config_file`` (YAML or TOML) > ``defaults``. ``config_file`` is
+        parsed as TOML when it has a ``.toml`` suffix and as YAML otherwise.
+        ``config_table`` selects a nested table from the file by dotted path
+        (e.g. ``"tool.myservice"`` to read settings from ``pyproject.toml``).
         ``config`` accepts an already-parsed mapping (e.g. a section of a
-        larger YAML document) and is merged at the same level as
-        ``config_file``.
+        larger document) and is merged at the same level as ``config_file``.
         """
 
         if config_file is not None:
-            file_config = _parse_config_file(Path(config_file))
+            file_config = _parse_config_file(Path(config_file), table=config_table)
             config = {**file_config, **config} if config else file_config
 
         raw = cls._collect_env(
@@ -613,6 +646,7 @@ def load_settings(
     env: Mapping[str, str] | None = None,
     env_file: str | os.PathLike[str] | None = None,
     config_file: str | os.PathLike[str] | None = None,
+    config_table: str | None = None,
     prefix: str | None = None,
     case_sensitive: bool = False,
     defaults: Mapping[str, Any] | None = None,
@@ -626,6 +660,7 @@ def load_settings(
         env=env,
         env_file=env_file,
         config_file=config_file,
+        config_table=config_table,
         prefix=prefix,
         case_sensitive=case_sensitive,
         defaults=defaults,
@@ -638,6 +673,7 @@ def load_composed_settings(
     env: Mapping[str, str] | None = None,
     env_file: str | os.PathLike[str] | None = None,
     config_file: str | os.PathLike[str] | None = None,
+    config_table: str | None = None,
     prefixes: Mapping[str, str] | None = None,
     defaults_cls: type[BaseSettings] | None = None,
     case_sensitive: bool = False,
@@ -647,12 +683,14 @@ def load_composed_settings(
 
     When ``config_file`` is given, top-level keys map to shared fields while
     each nested mapping (keyed by block field name) configures the matching
-    settings block.
+    settings block. The file is parsed as TOML for a ``.toml`` suffix and as
+    YAML otherwise; ``config_table`` selects a nested table by dotted path
+    (e.g. ``"tool.myservice"`` for ``pyproject.toml``).
     """
 
     config: dict[str, Any] = {}
     if config_file is not None:
-        config = _parse_config_file(Path(config_file))
+        config = _parse_config_file(Path(config_file), table=config_table)
 
     values: dict[str, Any] = {}
     base_values: dict[str, Any] = {}

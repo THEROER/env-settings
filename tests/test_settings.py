@@ -332,3 +332,105 @@ def test_load_composed_settings_preserves_nested_defaults() -> None:
     assert settings.service_name == "composed-service"
     assert settings.upstream.target == "default:5000"
     assert settings.upstream.timeout_seconds == pytest.approx(2.5)
+
+
+def test_load_from_toml_config_file(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        'host = "toml.example"\nport = 7000\ntags = ["alpha", "beta"]\n'
+    )
+
+    settings = ExampleSettings.load(config_file=config_file)
+
+    assert settings.host == "toml.example"
+    assert settings.port == 7000
+    assert settings.tags == ["alpha", "beta"]
+
+
+def test_toml_config_file_native_types(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("debug = true\ntimeout = 1.25\n")
+
+    settings = ExampleSettings.load(config_file=config_file)
+
+    assert settings.debug is True
+    assert settings.timeout == pytest.approx(1.25)
+
+
+def test_load_from_toml_config_table(tmp_path: Path) -> None:
+    config_file = tmp_path / "pyproject.toml"
+    config_file.write_text(
+        '[project]\nname = "demo"\n\n'
+        '[tool.example]\nhost = "tool.example"\nport = 9100\n'
+    )
+
+    settings = ExampleSettings.load(
+        config_file=config_file,
+        config_table="tool.example",
+    )
+
+    assert settings.host == "tool.example"
+    assert settings.port == 9100
+
+
+def test_missing_toml_config_table_is_ignored(tmp_path: Path) -> None:
+    config_file = tmp_path / "pyproject.toml"
+    config_file.write_text('[project]\nname = "demo"\n')
+
+    settings = ExampleSettings.load(
+        config_file=config_file,
+        config_table="tool.absent",
+    )
+
+    assert settings.host == "localhost"
+
+
+def test_toml_config_table_must_be_mapping(tmp_path: Path) -> None:
+    config_file = tmp_path / "pyproject.toml"
+    config_file.write_text('[tool]\nexample = "scalar"\n')
+
+    with pytest.raises(msgspec.ValidationError, match="must be a mapping"):
+        ExampleSettings.load(config_file=config_file, config_table="tool.example")
+
+
+def test_env_precedence_over_toml_config_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("port = 7000\n")
+    monkeypatch.setenv("PORT", "9999")
+
+    settings = ExampleSettings.load(config_file=config_file)
+
+    assert settings.port == 9999
+
+
+def test_load_composed_settings_from_toml_config_table(tmp_path: Path) -> None:
+    class UpstreamSettings(BaseSettings):
+        target: str = ""
+        timeout_seconds: float = 5.0
+
+    class AppSettings(msgspec.Struct, kw_only=True):
+        service_name: str = "app"
+        upstream: UpstreamSettings = msgspec.field(default_factory=UpstreamSettings)
+
+    class Defaults(BaseSettings):
+        service_name: str = "composed-service"
+
+    config_file = tmp_path / "pyproject.toml"
+    config_file.write_text(
+        '[tool.app]\nservice_name = "from-toml"\n\n'
+        '[tool.app.upstream]\ntarget = "toml:5000"\ntimeout_seconds = 3.5\n'
+    )
+
+    settings = load_composed_settings(
+        AppSettings,
+        config_file=config_file,
+        config_table="tool.app",
+        defaults_cls=Defaults,
+        prefixes={"upstream": "UPSTREAM_"},
+    )
+
+    assert settings.service_name == "from-toml"
+    assert settings.upstream.target == "toml:5000"
+    assert settings.upstream.timeout_seconds == pytest.approx(3.5)

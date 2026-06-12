@@ -5,7 +5,7 @@ A tiny settings loader inspired by `pydantic_settings`, but implemented with [`m
 ## Features
 
 - Define settings as `msgspec.Struct` classes
-- Load values from the current environment, optional `.env` files, YAML config files, and defaults
+- Load values from the current environment, optional `.env` files, YAML or TOML config files, and defaults
 - Automatic type coercion for scalar values and common collection formats
 - Optional prefixes and case-insensitive matching
 - File-backed secret fallback via `*_FILE` variables
@@ -30,12 +30,13 @@ print(settings.database_url)
 
 `.env` values override defaults, while real environment variables take precedence over the file.
 
-## YAML config files
+## YAML and TOML config files
 
-A YAML (`.yaml`/`.yml`) file can supply structured, non-secret configuration —
-the kind you commit to git — while `.env` keeps private values out of the
-repository. The two sources are independent: each has its own path and either
-can be used alone or together.
+A config file can supply structured, non-secret configuration — the kind you
+commit to git — while `.env` keeps private values out of the repository. The
+two sources are independent: each has its own path and either can be used alone
+or together. The file is parsed as TOML when it has a `.toml` suffix and as YAML
+otherwise.
 
 ```python
 settings = AppSettings.load(config_file="config.yaml", env_file=".env")
@@ -50,9 +51,32 @@ tags:
   - monitoring
 ```
 
-Values resolve with the precedence **real env vars > `.env` file > YAML config >
+Values resolve with the precedence **real env vars > `.env` file > config file >
 defaults**. So if `HOST` appears both in `config.yaml` and the environment, the
-environment wins; fields only present in YAML are still applied.
+environment wins; fields only present in the config file are still applied.
+
+The same applies to TOML. To read settings straight out of `pyproject.toml`,
+point `config_file` at it and use `config_table` to select the table (a dotted
+path) that holds your settings:
+
+```python
+settings = AppSettings.load(
+    config_file="pyproject.toml",
+    config_table="tool.myservice",
+)
+```
+
+```toml
+# pyproject.toml
+[tool.myservice]
+debug = false
+host = "api.example.com"
+tags = ["landing", "monitoring"]
+```
+
+`config_table` works with any config file format; without it the whole document
+is used. `load_composed_settings` accepts both `config_file` and `config_table`
+as well, so each prefixed block can be configured from a nested table.
 
 Because YAML is already structured, native types are used directly — no string
 parsing is needed for lists, mappings, or nested records:
